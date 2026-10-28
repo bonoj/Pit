@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090c11"><title>PIT · Experiments</title><script>try{if(location.search||location.hash)history.replaceState(null,"",location.pathname)}catch(e){}</script>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090c11;color:#e8edf3;font:14px system-ui,sans-serif}button{font:inherit;cursor:pointer}#app{height:100dvh;display:flex;flex-direction:column}header{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid #29303b;background:#10151d;min-height:52px}h1{font-size:17px;letter-spacing:.16em;margin:0 8px 0 0}#build{font:12px ui-monospace,monospace;color:#b2c7dc}#fps{font:12px ui-monospace,monospace;color:#8ed1b4;margin-left:auto}#refresh{border:1px solid #425167;background:#202a38;color:#e8edf3;border-radius:8px;padding:7px 12px}#status{font:11px ui-monospace,monospace;padding:7px 12px;color:#9ca9b8;border-bottom:1px solid #242c35}#stage{flex:1;min-height:0;display:grid;place-items:center;overflow:hidden}#welcome{text-align:center;padding:24px;max-width:440px}#welcome strong{display:block;font-size:clamp(38px,11vw,80px);letter-spacing:.22em;font-weight:300}#welcome p{color:#9aa6b6;line-height:1.6}#status.bad{color:#ff9b83}@media(max-width:390px){header{gap:7px;padding:8px}h1{font-size:15px;margin:0}#refresh{padding:7px}}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090c11;color:#e8edf3;font:14px system-ui,sans-serif}button{font:inherit;cursor:pointer}#app{height:100dvh;display:flex;flex-direction:column}header{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid #29303b;background:#10151d;min-height:52px}h1{font-size:17px;letter-spacing:.16em;margin:0 8px 0 0}#build{font:12px ui-monospace,monospace;color:#b2c7dc}#fps{font:12px ui-monospace,monospace;color:#8ed1b4;margin-left:auto}#refresh{border:1px solid #425167;background:#202a38;color:#e8edf3;border-radius:8px;padding:7px 12px}#status{font:11px ui-monospace,monospace;padding:7px 12px;color:#9ca9b8;border-bottom:1px solid #242c35}#stage{flex:1;min-height:0;position:relative;overflow:hidden}#cartridge{display:block;width:100%;height:100%;border:0;background:#090c11}#welcome{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}#welcome{text-align:center;padding:24px;max-width:440px}#welcome strong{display:block;font-size:clamp(38px,11vw,80px);letter-spacing:.22em;font-weight:300}#welcome p{color:#9aa6b6;line-height:1.6}#status.bad{color:#ff9b83}@media(max-width:390px){header{gap:7px;padding:8px}h1{font-size:15px;margin:0}#refresh{padding:7px}}
 </style></head><body><div id="app"><header><h1>PIT</h1><span id="build">BUILD · checking</span><span id="fps">-- FPS</span><button id="refresh" type="button" aria-label="Refresh and check deployment">↻ Refresh</button></header><div id="status" role="status">Checking deployed build…</div><main id="stage"><section id="welcome"><strong>PIT</strong><p>One page. Disposable experiments. No stale-build ambiguity.</p></section></main></div>
 <script>
 (()=>{
@@ -9,6 +9,21 @@
 const build=document.querySelector('#build'),fps=document.querySelector('#fps'),status=document.querySelector('#status');
 const STAMP='__PIT_DEPLOY_SHA__';const embedded=STAMP;
 const short=s=>s.slice(0,8);
+const stage=document.querySelector('#stage');
+const CATALOG=['voice'];
+const requested=new URLSearchParams(location.search).get('toy');
+const selected=CATALOG.includes(requested)?requested:null;
+function mount(toy){
+ if(!CATALOG.includes(toy))return;
+ stage.replaceChildren();
+ const frame=document.createElement('iframe');
+ frame.id='cartridge';frame.title=toy+' experiment';
+ frame.setAttribute('allow','autoplay');
+ frame.src='./experiments/'+encodeURIComponent(toy)+'/index.html?build='+encodeURIComponent(embedded);
+ stage.append(frame);
+}
+if(selected)mount(selected);
+window.Pit=Object.freeze({mount,experiments:CATALOG.slice()});
 let latest=null;
 const nonce=()=>Date.now()+'-'+Math.random().toString(36).slice(2);
 async function check(){
@@ -24,7 +39,7 @@ async function check(){
  }catch(e){build.textContent='BUILD · '+short(embedded);status.classList.add('bad');status.textContent='UNVERIFIED · '+e.message;}
 }
 document.querySelector('#refresh').addEventListener('click',()=>{
- const url=new URL(location.pathname,location.origin);url.searchParams.set('_pit_reload',nonce());location.replace(url.href);
+ const url=new URL(location.pathname,location.origin);if(selected)url.searchParams.set('toy',selected);url.searchParams.set('_pit_reload',nonce());location.replace(url.href);
 });
 let frames=0,last=performance.now();function frame(t){frames++;if(t-last>=1000){fps.textContent=Math.round(frames*1000/(t-last))+' FPS';frames=0;last=t}requestAnimationFrame(frame)}requestAnimationFrame(frame);
 check();document.addEventListener('visibilitychange',()=>{if(!document.hidden)check()});
