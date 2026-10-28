@@ -40,7 +40,7 @@ jobs:
               dst.parent.mkdir(parents=True,exist_ok=True)
               shutil.copy2(p,dst)
           experiments=sorted(p.parent.name for p in pathlib.Path('experiments').glob('*/index.html') if re.fullmatch(r'[a-z0-9][a-z0-9_-]*',p.parent.name))
-          (site/'experiments.json').write_text(json.dumps({'sha':sha,'experiments':experiments})+'\\n')
+          (site/'experiments.json').write_text(json.dumps({'sha':sha,'experiments':experiments})+'\n')
           print('Indexed cartridges:',experiments)
           PY
       - uses: actions/upload-pages-artifact@v3
