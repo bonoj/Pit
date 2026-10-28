@@ -1,31 +1,43 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Voice · Pit</title>
 <style>
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#111923;color:#eaf0f6;font:16px system-ui}main{max-width:560px;margin:auto;padding:24px;display:flex;flex-direction:column;gap:14px}textarea{min-height:140px;background:#182330;border:1px solid #425367;border-radius:12px;color:inherit;padding:14px;font:inherit}button{background:#293c51;border:1px solid #60768f;border-radius:10px;color:white;padding:13px;font:inherit;flex:1}.row{display:flex;gap:10px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#182330;padding:12px;border-radius:10px;font-size:12px}p{color:#aebccc;font-size:13px}
-</style></head><body><main><h2>VOICE · native diagnostic</h2><textarea id="words">Welcome to hell.</textarea><div class="row"><button id="speak">Speak (default)</button><button id="stop">Stop</button></div><p id="status" role="status">Ready. No downloads, APIs or selected voices.</p><pre id="log"></pre></main>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#111923;color:#eaf0f6;font:16px system-ui}main{max-width:560px;margin:auto;padding:24px;display:flex;flex-direction:column;gap:14px}textarea{min-height:145px;background:#182330;border:1px solid #425367;border-radius:12px;color:inherit;padding:14px;font:inherit}button{background:#293c51;border:1px solid #60768f;border-radius:10px;color:white;padding:13px;font:inherit;flex:1}button:disabled{opacity:.5}.row{display:flex;gap:10px}p{color:#aebccc;font-size:13px;margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#182330;padding:12px;border-radius:10px;font-size:12px;min-height:65px}
+</style></head><body><main><h2>VOICE · Pit</h2><textarea id="words">Welcome to hell.</textarea><div class="row"><button id="speak">Speak</button><button id="stop">Stop</button></div><p id="status" role="status">Loading local speech engine…</p><pre id="log"></pre><p>eSpeak NG via Spellophone 0.2.1 · GPL-3.0-or-later. Synthesis happens on your device; engine and dictionary are fetched from jsDelivr on first load. No speech API or account.</p></main>
+<script src="https://cdn.jsdelivr.net/npm/@spelling-creator/spellophone@0.2.1/dist/legacy/spellophone.iife.js"></script>
 <script>
-const synth=window.speechSynthesis,log=document.querySelector('#log'),status=document.querySelector('#status');
-let current=null,timeout=null;
-function report(s){log.textContent+=new Date().toLocaleTimeString()+' '+s+'\n';}
-function state(s){status.textContent=s;report(s);}
-function clear(){if(timeout)clearTimeout(timeout);timeout=null;}
-report('speechSynthesis: '+Boolean(synth));
-report('userAgent: '+navigator.userAgent);
-report('secureContext: '+window.isSecureContext);
-if(synth){report('voices now: '+synth.getVoices().length);synth.addEventListener('voiceschanged',()=>report('voiceschanged: '+synth.getVoices().length+' voices'));}
-document.querySelector('#speak').onclick=()=>{
- if(!synth){state('Web Speech API unavailable');return;}
- clear();synth.cancel();
- const text=document.querySelector('#words').value.trim();if(!text){state('Enter text');return;}
- const u=new SpeechSynthesisUtterance(text);current=u;
- u.onstart=()=>{if(current===u)state('Started speaking');};
- u.onend=()=>{if(current===u){clear();state('Finished speaking');}};
- u.onerror=e=>{if(current===u){clear();state('Speech error: '+e.error);}};
- u.onpause=()=>report('Paused');u.onresume=()=>report('Resumed');
- state('Calling speak() with default voice');
- try{synth.speak(u);report('after speak(): pending='+synth.pending+' speaking='+synth.speaking+' paused='+synth.paused);}
- catch(e){state('Exception: '+e.message);return;}
- timeout=setTimeout(()=>{if(current===u)state('Timeout (10s): pending='+synth.pending+' speaking='+synth.speaking+' paused='+synth.paused)},10000);
-};
-document.querySelector('#stop').onclick=()=>{clear();current=null;synth?.cancel();state('Stopped');};
+const $=id=>document.getElementById(id),status=$('status'),log=$('log');
+let engine=null,ready=null,ctx=null,source=null;
+function state(s){status.textContent=s;log.textContent+=s+'\n';}
+function stop(){if(source){try{source.stop()}catch(e){}source.disconnect();source=null}}
+async function initialize(){
+ if(engine)return engine;
+ if(ready)return ready;
+ ready=(async()=>{
+  if(!window.Spellophone)throw Error('Speech library could not load. Check CDN connection.');
+  const e=await Spellophone.createEspeak({cdn:'jsdelivr'});
+  e.setVoice('en-us');engine=e;state('Ready · '+e.version+' · en-us');return e;
+ })().catch(e=>{ready=null;state('Load failed: '+e.message);throw e});
+ return ready;
+}
+async function speak(){
+ const text=$('words').value.trim();if(!text){state('Enter text');return}
+ $('speak').disabled=true;
+ try{
+  if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();
+  await ctx.resume();
+  const e=await initialize();
+  stop();
+  state('Synthesizing '+text.length+' characters…');
+  const result=e.synthesize(text);
+  const buffer=ctx.createBuffer(1,result.samples.length,result.sampleRate);
+  buffer.copyToChannel(Spellophone.toFloat32(result.samples),0);
+  const s=ctx.createBufferSource();s.buffer=buffer;s.connect(ctx.destination);source=s;
+  s.onended=()=>{if(source===s){source=null;state('Finished')}s.disconnect()};
+  s.start();state('Speaking · '+(buffer.duration.toFixed(2))+' seconds');
+ }catch(err){state('Speak failed: '+err.message)}
+ finally{$('speak').disabled=false}
+}
+$('speak').onclick=speak;
+$('stop').onclick=()=>{stop();state('Stopped')};
+initialize().catch(()=>{});
 </script></body></html>
