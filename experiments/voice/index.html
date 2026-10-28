@@ -2,43 +2,34 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Voice · Pit</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#111923;color:#eaf0f6;font:16px system-ui}main{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:14px;max-width:560px;margin:auto;padding:22px}h2{margin:0}textarea{width:100%;min-height:160px;resize:vertical;border:1px solid #425367;background:#182330;border-radius:12px;color:inherit;padding:14px;font:inherit}.controls{display:flex;gap:10px}button{flex:1;border:1px solid #60768f;border-radius:10px;background:#293c51;color:white;padding:13px;font:inherit}button:disabled{opacity:.5}audio{width:100%}p{color:#aebccc;font-size:13px;line-height:1.5}#status{min-height:2.8em}
-</style></head><body><main><h2>VOICE · cartridge 001</h2><textarea id="words" placeholder="Type something to say…">Welcome to hell.</textarea><div class="controls"><button id="speak">Speak</button><button id="stop">Stop</button></div><audio id="player" controls preload="none"></audio><p id="status" role="status">Ready. Speech is generated in this browser; first use downloads the voice model.</p><p id="details">Kokoro · local inference · no Android speech service</p></main>
-<script type="module">
-const status=document.querySelector('#status'),button=document.querySelector('#speak'),player=document.querySelector('#player');
-let engine=null,enginePromise=null,url=null,job=0;
-function state(s){status.textContent=s;}
-async function loadEngine(){
- if(engine)return engine;
- if(!enginePromise)enginePromise=(async()=>{
-  state('Loading speech engine and model (first use may take a while)…');
-  const {KokoroTTS}=await import('https://esm.sh/kokoro-js@1.2.1?bundle');
-  let error;
-  for(const dtype of ['q8','fp32']){
-   try{
-    state('Loading Kokoro '+dtype+' model…');
-    return await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX',{dtype,device:'wasm',progress_callback:p=>{
-     if(p.status==='progress'&&p.progress!=null)state('Downloading voice model: '+Math.round(p.progress)+'%');
-    }});
-   }catch(e){error=e;}
-  }
-  throw error;
- })().then(x=>(engine=x),e=>{enginePromise=null;throw e});
- return enginePromise;
-}
-document.querySelector('#speak').onclick=async()=>{
+</style></head><body><main><h2>VOICE · cartridge 001</h2><textarea id="words" placeholder="Type something to say…">Welcome to hell.</textarea><div class="controls"><button id="speak">Speak</button><button id="stop">Stop</button></div><audio id="player" controls preload="none"></audio><p id="status" role="status">Ready to test OpenTTS.</p><p id="details">OpenTTS · remote API experiment · errors shown explicitly</p></main>
+<script>
+const statusEl=document.querySelector('#status'),button=document.querySelector('#speak'),player=document.querySelector('#player');
+let url=null,controller=null;
+function state(s){statusEl.textContent=s;}
+button.onclick=async()=>{
  const text=document.querySelector('#words').value.trim();if(!text){state('Enter some text.');return;}
- const token=++job;button.disabled=true;player.pause();
+ controller?.abort();controller=new AbortController();const active=controller;button.disabled=true;player.pause();
  try{
-  const tts=await loadEngine();if(token!==job)return;
-  state('Generating speech…');
-  const audio=await tts.generate(text,{voice:'af_heart',speed:1});if(token!==job)return;
-  const blob=audio.toBlob();if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(blob);
-  player.src=url;state('Speech ready · playing.');
+  state('Requesting audio from OpenTTS…');
+  const response=await fetch('https://www.opentexttospeech.com/api/v1/tts',{
+   method:'POST',mode:'cors',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({text,voice:'voice-107',pitch:0,speed:0,volume:100,format:'mp3'}),
+   signal:active.signal
+  });
+  const type=response.headers.get('content-type')||'';
+  if(!response.ok)throw new Error('HTTP '+response.status+': '+(await response.text()).slice(0,240));
+  if(!type.includes('audio/')&&!type.includes('octet-stream'))throw new Error('Unexpected response ('+type+'): '+(await response.text()).slice(0,240));
+  const blob=await response.blob();if(!blob.size)throw new Error('Empty audio response.');
+  if(active!==controller)return;
+  if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(blob);player.src=url;
+  state('Received '+Math.round(blob.size/1024)+' KB · playing.');
   await player.play();
- }catch(e){if(token===job)state('Speech generation failed: '+(e?.message||String(e)));}
- finally{if(token===job)button.disabled=false;}
+ }catch(e){
+  if(active===controller&&e.name!=='AbortError')state('OpenTTS failed: '+e.message+(e instanceof TypeError?' (network/CORS or endpoint unavailable)':''));
+ }finally{if(active===controller)button.disabled=false;}
 };
-document.querySelector('#stop').onclick=()=>{job++;button.disabled=false;player.pause();player.currentTime=0;state('Stopped.');};
+document.querySelector('#stop').onclick=()=>{controller?.abort();controller=null;button.disabled=false;player.pause();player.currentTime=0;state('Stopped.');};
 player.onended=()=>state('Finished.');
-window.addEventListener('pagehide',()=>{player.pause();if(url)URL.revokeObjectURL(url);});
+window.addEventListener('pagehide',()=>{controller?.abort();if(url)URL.revokeObjectURL(url);});
 </script></body></html>
