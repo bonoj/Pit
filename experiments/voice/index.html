@@ -1,1 +1,43 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#111923;color:#eaf0f6;font:16px system-ui}main{height:100%;display:flex;flex-direction:column;justify-content:center;gap:14px;max-width:520px;margin:auto;padding:22px}textarea{width:100%;min-height:130px;resize:none;border:1px solid #425367;background:#182330;border-radius:12px;color:inherit;padding:14px;font:inherit}button{border:1px solid #60768f;border-radius:10px;background:#293c51;color:white;padding:13px;font:inherit}p{color:#aebccc;font-size:13px}</style></head><body><main><h2>VOICE · cartridge 001</h2><textarea id="words" placeholder="Type something to say…"></textarea><button id="speak">Speak</button><p id="status">Uses browser speech synthesis. Availability depends on browser support.</p></main><script>document.querySelector('#speak').onclick=()=>{const s=document.querySelector('#status');if(!('speechSynthesis' in window)){s.textContent='Speech synthesis unavailable in this browser.';return;}const value=document.querySelector('#words').value.trim();if(!value)return;try{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(value));s.textContent='Speaking…'}catch(e){s.textContent='Speech failed: '+e.message}};</script></body></html>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Voice · Pit</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#111923;color:#eaf0f6;font:16px system-ui}main{height:100%;display:flex;flex-direction:column;justify-content:center;gap:14px;max-width:560px;margin:auto;padding:22px}h2{margin:0}textarea{width:100%;min-height:130px;resize:none;border:1px solid #425367;background:#182330;border-radius:12px;color:inherit;padding:14px;font:inherit}.controls{display:flex;gap:10px}button{flex:1;border:1px solid #60768f;border-radius:10px;background:#293c51;color:white;padding:13px;font:inherit}button:disabled{opacity:.5}p{color:#aebccc;font-size:13px;line-height:1.5}#status{min-height:2.8em}
+</style></head><body><main><h2>VOICE · cartridge 001</h2><textarea id="words" placeholder="Type something to say…">Hello from Pit.</textarea><div class="controls"><button id="speak">Speak</button><button id="stop">Stop</button></div><p id="status" role="status">Ready. Audio requires browser speech synthesis.</p><p id="details"></p></main>
+<script>
+(()=>{
+'use strict';
+const synth=window.speechSynthesis;
+const status=document.querySelector('#status');
+const details=document.querySelector('#details');
+let utterance=null, watchdog=null, generation=0;
+function state(message){status.textContent=message;}
+function clearWatchdog(){if(watchdog!==null){clearTimeout(watchdog);watchdog=null;}}
+function stop(message='Stopped.'){
+ generation++;clearWatchdog();
+ if(synth){try{synth.cancel();}catch(e){}}
+ utterance=null;state(message);
+}
+function speak(){
+ const text=document.querySelector('#words').value.trim();
+ if(!text){state('Enter some text first.');return;}
+ if(!synth||!window.SpeechSynthesisUtterance){state('Speech synthesis is unavailable in this browser.');return;}
+ stop('Preparing…');
+ const token=generation;
+ const u=new SpeechSynthesisUtterance(text);
+ utterance=u;u.lang='en-US';u.rate=1;u.volume=1;
+ const voices=synth.getVoices();
+ const preferred=voices.find(v=>v.lang.toLowerCase().startsWith('en')&&v.localService)||voices.find(v=>v.lang.toLowerCase().startsWith('en'));
+ if(preferred)u.voice=preferred;
+ details.textContent='Voices: '+voices.length+(preferred?' · selected: '+preferred.name:' · browser default')+' · secure: '+window.isSecureContext;
+ u.onstart=()=>{if(token===generation){state('Speaking · audio started.');clearWatchdog();watchdog=setTimeout(()=>{if(token===generation)stop('Playback timed out. Browser did not finish the utterance.');},Math.max(12000,Math.min(120000,text.length*350)));}};
+ u.onend=()=>{if(token===generation){clearWatchdog();utterance=null;state('Finished.');}};
+ u.onerror=e=>{if(token===generation){clearWatchdog();utterance=null;state('Speech error: '+(e.error||'unknown'));}};
+ state('Queued · waiting for browser audio to start…');
+ watchdog=setTimeout(()=>{if(token===generation)stop('Timed out: browser never started speech. Try opening Pit in Chrome instead of an embedded webview.');},5000);
+ try{synth.speak(u);}catch(e){if(token===generation)stop('Speech failed: '+e.message);}
+}
+document.querySelector('#speak').addEventListener('click',speak);
+document.querySelector('#stop').addEventListener('click',()=>stop());
+window.addEventListener('pagehide',()=>stop());
+})();
+</script></body></html>
