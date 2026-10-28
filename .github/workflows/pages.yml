@@ -35,7 +35,7 @@ jobs:
           (site/'index.html').write_text(html)
           (site/'build.json').write_text(json.dumps({'sha':sha})+'\n')
           for p in pathlib.Path('.').rglob('*'):
-              if not p.is_file() or any(x in ('.git','.github','site') for x in p.parts) or p.name=='index.html':continue
+              if not p.is_file() or any(x in ('.git','.github','site') for x in p.parts) or p==pathlib.Path('index.html'):continue
               dst=site/p
               dst.parent.mkdir(parents=True,exist_ok=True)
               shutil.copy2(p,dst)
@@ -65,6 +65,9 @@ jobs:
                   html=get('index.html')
                   catalog=json.loads(get('experiments.json'))
                   assert catalog['sha']==sha and 'voice' in catalog['experiments']
+                  for toy in catalog['experiments']:
+                      cartridge=get('experiments/'+toy+'/index.html')
+                      assert '<html' in cartridge.lower(), 'missing cartridge '+toy
                   assert manifest['sha']==sha
                   assert sha in html and '__PIT_DEPLOY_SHA__' not in html
                   print('VERIFIED PUBLIC PIT',sha)
