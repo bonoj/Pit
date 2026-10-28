@@ -39,6 +39,9 @@ jobs:
               dst=site/p
               dst.parent.mkdir(parents=True,exist_ok=True)
               shutil.copy2(p,dst)
+          experiments=sorted(p.parent.name for p in pathlib.Path('experiments').glob('*/index.html') if re.fullmatch(r'[a-z0-9][a-z0-9_-]*',p.parent.name))
+          (site/'experiments.json').write_text(json.dumps({'sha':sha,'experiments':experiments})+'\\n')
+          print('Indexed cartridges:',experiments)
           PY
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -60,6 +63,8 @@ jobs:
                       with urllib.request.urlopen(req,timeout=15) as r:return r.read().decode()
                   manifest=json.loads(get('build.json'))
                   html=get('index.html')
+                  catalog=json.loads(get('experiments.json'))
+                  assert catalog['sha']==sha and 'voice' in catalog['experiments']
                   assert manifest['sha']==sha
                   assert sha in html and '__PIT_DEPLOY_SHA__' not in html
                   print('VERIFIED PUBLIC PIT',sha)
