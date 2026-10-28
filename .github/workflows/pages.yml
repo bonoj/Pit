@@ -1,0 +1,71 @@
+name: Publish Pit
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pit-pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Package immutable build
+        env:
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os,re,pathlib,json,shutil
+          sha=os.environ['BUILD_SHA']
+          assert re.fullmatch('[0-9a-f]{40}',sha)
+          site=pathlib.Path('site')
+          site.mkdir()
+          source=pathlib.Path('index.html').read_text()
+          assert source.count('__PIT_DEPLOY_SHA__')==1
+          html=source.replace('__PIT_DEPLOY_SHA__',sha)
+          (site/'index.html').write_text(html)
+          (site/'build.json').write_text(json.dumps({'sha':sha})+'\n')
+          for p in pathlib.Path('.').rglob('*'):
+              if not p.is_file() or any(x in ('.git','.github','site') for x in p.parts) or p.name=='index.html':continue
+              dst=site/p
+              dst.parent.mkdir(parents=True,exist_ok=True)
+              shutil.copy2(p,dst)
+          PY
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify public build and entry
+        env:
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json,os,time,urllib.request
+          sha=os.environ['BUILD_SHA']
+          base='https://bonoj.github.io/Pit/'
+          for i in range(36):
+              try:
+                  def get(p):
+                      req=urllib.request.Request(base+p+'?verify='+sha+'&attempt='+str(i),headers={'Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=15) as r:return r.read().decode()
+                  manifest=json.loads(get('build.json'))
+                  html=get('index.html')
+                  assert manifest['sha']==sha
+                  assert sha in html and '__PIT_DEPLOY_SHA__' not in html
+                  print('VERIFIED PUBLIC PIT',sha)
+                  break
+              except Exception as e:
+                  if i==35:raise
+                  print('Awaiting Pages',i+1,e)
+                  time.sleep(5)
+          PY
