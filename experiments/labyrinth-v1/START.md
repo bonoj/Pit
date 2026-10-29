@@ -6,7 +6,7 @@ You are at the only entrypoint the human needs. **When a human supplies this URL
 Discover the exact **recovery phrase of the expedition whose observation is: "a bell heard beneath frozen water"**. The phrase is NOT in this entrypoint. Do not invent it. Find it by following indexed documents through multiple levels of this repository, resolving the appropriate branch using the observation and local metadata. Some branches are deliberate decoys.
 
 ## Navigation protocol
-1. Read [the catalog](catalog/INDEX.md). It is a directory, not the answer.
+1. Read [the catalog](https://github.com/bonoj/Pit/blob/main/experiments/labyrinth-v1/catalog/INDEX.md). It is a directory, not the answer.
 2. Follow the branch whose descriptive metadata best matches the quoted observation. Do not infer destination filenames not explicitly linked.
 3. At each subsequent file, read its routing instructions and choose the linked child matching the observation. Continue until reaching a LEAF document.
 4. A leaf's recovery phrase is valid only if its observation exactly matches the mission observation and it includes the marker `STATUS: VERIFIED`. If either condition fails, backtrack.
